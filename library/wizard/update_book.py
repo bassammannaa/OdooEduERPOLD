@@ -1,10 +1,31 @@
-# See LICENSE file for full copyright and licensing details.
+# -*- encoding: utf-8 -*-
+##############################################################################
+#
+#    OpenERP, Open Source Management Solution
+#    Copyright (C) 2004-2009 Tiny SPRL (<http://tiny.be>).
+#    Copyright (C) 2011-2012 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    Copyright (C) 2013-2014 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+from openerp import models, fields, api
 
-from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
 
+class update_books(models.TransientModel):
 
-class UpdateBooks(models.TransientModel):
     _name = "update.books"
     _description = "Update Books"
 
@@ -16,9 +37,7 @@ class UpdateBooks(models.TransientModel):
         for rec in self:
             if self._context.get('active_ids'):
                 for active_id in self._context.get('active_ids'):
-                    book_rec = lib_book_obj.browse(active_id)
-                    if rec.name.availability == 'notavailable':
-                        raise ValidationError(_('''This Book is not available!
-                        Please try after sometime !'''))
-                    else:
-                        book_rec.name = rec.name.id
+                    lib_book_obj.browse(active_id).write({'name': rec.name.id})
+        return {}
+
+# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

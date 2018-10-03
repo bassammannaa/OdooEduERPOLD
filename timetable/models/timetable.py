@@ -1,129 +1,132 @@
-# See LICENSE file for full copyright and licensing details.
+# -*- encoding: utf-8 -*-
+##############################################################################
+#
+#    OpenERP, Open Source Management Solution
+#    Copyright (C) 2004-2009 Tiny SPRL (<http://tiny.be>).
+#    Copyright (C) 2011-2012 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    Copyright (C) 2013-2014 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    Copyright (C) 2015 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+from openerp import models, fields, api, _
+from openerp.exceptions import Warning
+import datetime
 
-from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
 
+class time_table(models.Model):
 
-class TimeTable(models.Model):
     _description = 'Time Table'
     _name = 'time.table'
 
-    @api.depends('timetable_ids')
-    def _compute_user(self):
-        '''Method to compute user'''
-        for rec in self:
-            rec.user_ids = [teacher.teacher_id.employee_id.user_id.id
-                            for teacher in rec.timetable_ids
-                            ]
-        return True
-
     name = fields.Char('Description')
     standard_id = fields.Many2one('school.standard', 'Academic Class',
-                                  required=True,
-                                  help="Select Standard")
-    year_id = fields.Many2one('academic.year', 'Year', required=True,
-                              help="select academic year")
+                                  required=True)
+    year_id = fields.Many2one('academic.year', 'Year', required=True)
     timetable_ids = fields.One2many('time.table.line', 'table_id', 'TimeTable')
-    timetable_type = fields.Selection([('regular', 'Regular')],
-                                      'Time Table Type', default="regular",
-                                      inivisible=True)
-    user_ids = fields.Many2many('res.users', string="Users",
-                                compute="_compute_user", store=True)
-    class_room_id = fields.Many2one('class.room', 'Room Number')
+    do_not_create = fields.Boolean('Do not Create')
 
+    @api.one
     @api.constrains('timetable_ids')
     def _check_lecture(self):
-        '''Method to check same lecture is not assigned on same day'''
-        if self.timetable_type == 'regular':
-            domain = [('table_id', 'in', self.ids)]
-            line_ids = self.env['time.table.line'].search(domain)
-            for rec in line_ids:
-                records = [rec_check.id for rec_check in line_ids
-                           if (rec.week_day == rec_check.week_day and
-                               rec.start_time == rec_check.start_time and
-                               rec.end_time == rec_check.end_time and
-                               rec.teacher_id.id == rec.teacher_id.id)]
-                if len(records) > 1:
-                    raise ValidationError(_('''You cannot set lecture at same
-                                            time %s  at same day %s for teacher
-                                            %s..!''') % (rec.start_time,
-                                                         rec.week_day,
-                                                         rec.teacher_id.name))
-                # Checks if time is greater than 24 hours than raise error
-                if rec.start_time > 24:
-                    raise ValidationError(_('''Start Time should be less than
-                                            24 hours!'''))
-                if rec.end_time > 24:
-                    raise ValidationError(_('''End Time should be less than
-                                            24 hours!'''))
-            return True
+        line_ids = self.env['time.table.line'].search([('table_id', '=',
+                                                        self.ids)])
+        for rec in line_ids:
+            records = [rec_check.id for rec_check in line_ids
+                       if (rec.week_day == rec_check.week_day) and
+                       (rec.start_time == rec_check.start_time) and
+                       (rec.end_time == rec_check.end_time)]
+            if len(records) > 1:
+                raise Warning(_('Warning!'), _("You can Not set lecture at"
+                                               "same time at same day..!!!"))
+        return True
 
 
-class TimeTableLine(models.Model):
+class time_table_line(models.Model):
+
     _description = 'Time Table Line'
     _name = 'time.table.line'
-    _rec_name = 'table_id'
+    _rec_name = "table_id"
 
     @api.multi
-    @api.constrains('teacher_id', 'subject_id')
-    def check_teacher(self):
-        '''Check if lecture is not related to teacher than raise error'''
-        if (self.teacher_id.id not in self.subject_id.teacher_ids.ids and
-                self.table_id.timetable_type == 'regular'):
-            raise ValidationError(_('''The subject %s is not assigned to
-                                    teacher %s.''') % (self.subject_id.name,
-                                                       self.teacher_id.name))
+    def onchange_recess(self, recess):
+        recess = {}
+        sub_id = self.env['subject.subject'].search([('name', 'like',
+                                                      'Recess')])
+        if not sub_id:
+            raise Warning(_('Warning!'),
+                          _("You must have a 'Recess' as a'' subject"))
+        recess.update({'value': {'subject_id': sub_id.id}})
+        return recess
 
-    teacher_id = fields.Many2one('school.teacher', 'Faculty Name',
-                                 help="Select Teacher")
+    @api.onchange('sub_exam_date')
+    def _get_day(self):
+        if self.sub_exam_date:
+            date1 = self.sub_exam_date
+            new_date = datetime.datetime.strptime(date1, '%Y-%m-%d')
+            self.week_day = new_date.strftime("%A")
+
+    teacher_id = fields.Many2one('hr.employee', 'Supervisor Name')
     subject_id = fields.Many2one('subject.subject', 'Subject Name',
-                                 help="Select Subject")
+                                 required=True)
     table_id = fields.Many2one('time.table', 'TimeTable')
-    start_time = fields.Float('Start Time', required=True,
-                              help="Time according to timeformat of 24 hours")
-    end_time = fields.Float('End Time', required=True,
-                            help="Time according to timeformat of 24 hours")
-    week_day = fields.Selection([('monday', 'Monday'),
-                                 ('tuesday', 'Tuesday'),
-                                 ('wednesday', 'Wednesday'),
-                                 ('thursday', 'Thursday'),
-                                 ('friday', 'Friday'),
-                                 ('saturday', 'Saturday'),
-                                 ('sunday', 'Sunday')], "Week day",)
-    class_room_id = fields.Many2one('class.room', 'Room Number')
+    tables_id = fields.Many2one('exam.exam', 'TimeTable')
+    start_time = fields.Float('Start Time', required=True)
+    end_time = fields.Float('End Time', required=True)
+    is_break = fields.Boolean('Is Break')
+    week_day = fields.Char('Day')
+    sub_exam_date = fields.Date('Subject Exam Date')
+    standard_id = fields.Many2one("school.standard", "Standard")
 
-    @api.constrains('teacher_id', 'class_room_id')
-    def check_teacher_room(self):
-        timetable_rec = self.env['time.table'].search([('id', '!=',
-                                                        self.table_id.id)])
-        if timetable_rec:
-            for data in timetable_rec:
-                for record in data.timetable_ids:
-                    if (data.timetable_type == 'regular' and
-                            self.table_id.timetable_type == 'regular' and
-                            self.teacher_id == record.teacher_id and
-                            self.week_day == record.week_day and
-                            self.start_time == record.start_time):
-                            raise ValidationError(_('''There is a lecture of
-                            Lecturer at same time!'''))
-                    if (data.timetable_type == 'regular' and
-                            self.table_id.timetable_type == 'regular' and
-                            self.class_room_id == record.class_room_id and
-                            self.start_time == record.start_time):
-                            raise ValidationError(_("The room is occupied."))
+    @api.constrains('sub_exam_date', 'tables_id')
+    def _check_sub_exam_date(self):
+        if self.sub_exam_date > self.tables_id.end_date:
+                raise Warning(_('Please Check The Subject Exam Date'))
+        return True
+
+    @api.constrains('sub_exam_date', 'tables_id')
+    def _check_sub_exam_start_date(self):
+        if self.sub_exam_date < self.tables_id.start_date:
+                raise Warning(_('Please Check The Subject Exam Date'))
+        return True
+
+    @api.multi
+    @api.onchange('standard_id')
+    def onchange_ad_standard(self):
+        sub_list = []
+        for exam_obj in self:
+            for time_table in exam_obj.standard_id:
+                for sub_id in time_table.subject_ids:
+                    sub_list.append(sub_id.id)
+        return {'domain': {'subject_id': [('id', 'in', sub_list)]}}
 
 
-class SubjectSubject(models.Model):
+class subject_subject(models.Model):
+
     _inherit = "subject.subject"
 
     @api.model
-    def _search(self, args, offset=0, limit=None, order=None, count=False,
-                access_rights_uid=None):
-        '''Override method to get subject related to teacher'''
-        teacher_id = self._context.get('teacher_id')
-        if teacher_id:
-            for teacher_data in self.env['school.teacher'].browse(teacher_id):
+    def search(self, args, offset=0, limit=None, order=None, count=False):
+        if self._context.get('teacher_id'):
+            for teacher_data in self.env['hr.employee'].browse(self.
+                                                               _context
+                                                               ['teacher_id']
+                                                               ):
                 args.append(('teacher_ids', 'in', [teacher_data.id]))
-        return super(SubjectSubject, self)._search(
-            args=args, offset=offset, limit=limit, order=order, count=count,
-            access_rights_uid=access_rights_uid)
+        return super(subject_subject, self).search(args, offset, limit,
+                                                   order, count=count)
+# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

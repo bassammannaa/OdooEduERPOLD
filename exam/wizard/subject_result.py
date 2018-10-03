@@ -1,26 +1,49 @@
-# See LICENSE file for full copyright and licensing details.
+# -*- encoding: utf-8 -*-
+##############################################################################
+#
+#    OpenERP, Open Source Management Solution
+#    Copyright (C) 2004-2009 Tiny SPRL (<http://tiny.be>).
+#    Copyright (C) 2011-2012 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    Copyright (C) 2013-2014 Serpent Consulting Services
+#    (<http://www.serpentcs.com>)
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+from openerp import models, fields, api
 
-from odoo import models, fields, api
 
+class subject_result_wiz(models.TransientModel):
 
-class SubjectResultWiz(models.TransientModel):
-    _name = 'subject.result.wiz'
-    _description = 'Subject Wise Result'
+    _name = "subject.result.wiz"
+    _description = "Subject Wise Result"
 
     result_ids = fields.Many2many("exam.subject", 'subject_result_wiz_rel',
-                                  'result_id', "exam_id", "Exam Subjects")
+                                  'result_id', "exam_id", "Exam Subjects",
+                                  select=1)
 
-    @api.model
-    def default_get(self, fields):
-        '''Override default method to get default subjects'''
-        res = super(SubjectResultWiz, self).default_get(fields)
-        exams = self.env['exam.result'].browse(self._context.get('active_id'))
-        subjectlist = [rec.subject_id.id for rec in exams.result_ids]
-        res.update({'result_ids': subjectlist})
-        return res
+    @api.v7
+    def result_report(self, cr, uid, ids, context):
+        data = self.read(cr, uid, ids)[0]
 
-    @api.multi
-    def result_report(self):
-        data = self.read()[0]
-        return self.env.ref('exam.add_exam_result_id_qweb').\
-            report_action([], data=data)
+        #         datas = {
+        #             'ids': context.get('active_ids', []),
+        #             'form': data,
+        #             'model': 'exam.result',
+        #         }
+        return self.pool['report'].get_action(cr, uid, [],
+                                              'exam.exam_result_report',
+                                              data=data, context=context)
+
+# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:

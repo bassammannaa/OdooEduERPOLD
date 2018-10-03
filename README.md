@@ -6,5 +6,3 @@ Serpent Consulting Services Pvt Ltd, the Official Odoo partner has here contribu
 
 Help us do better by donating to us and motivating us : http://www.serpentcs.com/page/donate-to-serpentcs
 Thanks.
-
-#test
